@@ -47,7 +47,7 @@ Uint32 width = 0;
 Uint32 height = 0;
 char *vfilename; 
 FILE *fpointer;
-Uint8 *y_data, *cr_data, *cb_data;
+Uint8 *y_data, *cr_data, *cb_data, *tmp_data;
 Uint16 zoom = 1;
 Uint16 min_zoom = 1;
 Uint16 frame = 0;
@@ -55,6 +55,7 @@ Uint16 quit = 0;
 Uint8 grid = 0;
 Uint8 bpp = 0;
 int cfidc = 1;
+int sp = 0;
 
 
 static const Uint8 SubWidthC[4] =
@@ -93,16 +94,31 @@ int load_frame(){
   }
   else if (cfidc>0)
     {
-      cnt = fread(cb_data, 1, height * width / SubSizeC[cfidc], fpointer);
-      // fprintf(stderr,"read %d cb bytes\n", cnt);
-      if(cnt < width * height / 4){
-	return 0;
+      if(!sp) {
+        cnt = fread(cb_data, 1, height * width / SubSizeC[cfidc], fpointer);
+          // fprintf(stderr,"read %d cb bytes\n", cnt);
+        if(cnt < width * height / 4){
+        	return 0;
+        } else {
+            cnt = fread(cr_data, 1, height * width / SubSizeC[cfidc], fpointer);
+            // fprintf(stderr,"read %d cr bytes\n", cnt);
+            if(cnt < width * height / 4){
+                return 0;
+            }
+        }
       } else {
-	cnt = fread(cr_data, 1, height * width / SubSizeC[cfidc], fpointer);
-	// fprintf(stderr,"read %d cr bytes\n", cnt);
-	if(cnt < width * height / 4){
-	  return 0;
-	}
+        int sz = height * width / SubSizeC[cfidc];
+        int tmp_sz = sz * 2;
+        int i;
+        cnt = fread(tmp_data, 1, tmp_sz, fpointer);
+        if(cnt < tmp_sz) {
+            return 0;
+        }
+
+        for(i = 0; i < sz; i++) {
+            cb_data[i] = tmp_data[i * 2];
+            cr_data[i] = tmp_data[i * 2 + 1];
+        }
       }
     }
   return 1;
@@ -197,7 +213,7 @@ void draw_frame(){
 }
 
 void print_usage(){
-  fprintf(stdout, "Usage: yay [-s <widht>x<heigh>] [-f format] filename.yuv\n\t format can be: 0-Y only, 1-YUV420, 2-YUV422, 3-YUV444\n");
+  fprintf(stdout, "Usage: yay [-s <widht>x<heigh>] [-f format] [-p] filename.yuv\n\t format can be: 0-Y only, 1-YUV420, 2-YUV422, 3-YUV444\n\t specify '-p' to enable semi-planar mode\n");
 }
 
 
@@ -218,7 +234,7 @@ int main(int argc, char *argv[])
     print_usage();
     return 1;
   } else {
-    while((opt = getopt(argc, argv, "f:s:")) != -1)
+    while((opt = getopt(argc, argv, "f:s:p")) != -1)
       switch(opt){
       case 's':
         if (sscanf(optarg, "%dx%d", &width, &height) != 2) {
@@ -233,6 +249,10 @@ int main(int argc, char *argv[])
 	  return 1;
 	}
 	break;
+      case 'p':
+        // Enable semi-planar mode
+        sp = 1;
+        break;
       default:
 	print_usage();
 	return 1;
@@ -310,6 +330,8 @@ int main(int argc, char *argv[])
     {
       cb_data = malloc(width * height * sizeof(Uint8) / SubSizeC[cfidc]);
       cr_data = malloc(width * height * sizeof(Uint8) / SubSizeC[cfidc]);
+      if (sp)
+        tmp_data = malloc(width * height * sizeof(Uint8) / SubSizeC[cfidc] * 2);
     }
 
   fpointer = fopen(vfilename, "rb"); 
@@ -449,6 +471,8 @@ int main(int argc, char *argv[])
   free(y_data);
   free(cb_data);
   free(cr_data);
+  if (sp)
+    free(tmp_data);
   fclose(fpointer);
   if (!used_s_opt)
     regfree(&reg);
