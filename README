@@ -12,6 +12,11 @@ width and height.
 Optionally you can provide width and height parameters via "-s
 <width>x<height>" paramter.
 
+The original code is downloaded from following site:
+http://mattzz.dyndns.org/wiki/Projects/YetAnotherYUVviewer
+
+I put the code in Github for my own maintenance.
+
 
 usage:
 ------
